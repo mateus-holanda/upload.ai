@@ -9,8 +9,18 @@ import { Label } from "./ui/label"
 import { Separator } from "./ui/separator"
 import { Textarea } from "./ui/textarea"
 
+type Status = 'waiting' | 'converting' | 'uploading' | 'generating' | 'success'
+
+const statusMessages = {
+  converting: 'Converting...',
+  uploading: 'Uploading...',
+  generating: 'Transcribing...',
+  success: 'Done!',
+}
+
 export function VideoInputForm() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [status, setStatus] = useState<Status>('waiting')
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -73,19 +83,29 @@ export function VideoInputForm() {
     }
 
     // Convert the video into an audio file
+    setStatus('converting')
+
     const audioFile = await convertVideoToAudio(videoFile)
 
     const data = new FormData()
 
     data.append('file', audioFile)
 
+    // Upload video to the API
+    setStatus('uploading')
+
     const response = await api.post('/videos', data)
 
     const videoId = response.data.video.id
 
+    // Generate transcription
+    setStatus('generating')
+
     await api.post(`/videos/${videoId}/transcription`, {
       prompt,
     })
+
+    setStatus('success')
   }
 
   const previewURL = useMemo(() => {
@@ -126,15 +146,25 @@ export function VideoInputForm() {
         <Label htmlFor="transcription_prompt">Transcription prompt</Label>
         <Textarea
           ref={promptInputRef}
+          disabled={status !== 'waiting'}
           id="transcription_prompt"
           className="h-20 leading-relaxed resize-none"
           placeholder="Insert keywords mentioned in the video separated by comma (,)"
         />
       </div>
 
-      <Button type="submit" className="w-full">
-        Upload video
-        <Upload className="w-4 h-4 ml-2" />
+      <Button
+        data-success={status === 'success'}
+        disabled={status !== 'waiting'}
+        type="submit"
+        className="w-full data-[success=true]:bg-emerald-400"
+      >
+        {status === 'waiting' ? (
+          <>
+            Upload video
+            <Upload className="w-4 h-4 ml-2" />
+          </>
+        ) : statusMessages[status]}
       </Button>
     </form>
   )
